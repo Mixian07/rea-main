@@ -128,22 +128,50 @@ export function browserScenario(browser, origin) {
   });
 }
 
-/** Run scenario capture through the public one-shot CLI. */
-export async function runScenarioCli(scenario) {
-  const { stdout } = await execute(
-    process.execPath,
-    [
-      "scripts/rea.mjs",
-      "capture-browser-scenario",
-      JSON.stringify(scenario),
-      "--json",
-    ],
+/** Preserve the CLI's reported code, category and details for the lane log. */
+const scenarioCliFailure = (cause, scenario) => {
+  const stdout = typeof cause?.stdout === "string" ? cause.stdout : "";
+  const stderr = typeof cause?.stderr === "string" ? cause.stderr : "";
+  let reported;
+  try {
+    reported = JSON.parse(stdout);
+  } catch {
+    reported = undefined;
+  }
+  const startUrl = scenario?.start_url?.url ?? "<unknown start_url>";
+  const detail =
+    reported === undefined
+      ? `exit=${String(cause?.code ?? "unknown")} stderr=${stderr.trim() || "<empty>"}`
+      : `code=${String(reported.code)} category=${String(reported.category)} details=${JSON.stringify(reported.details ?? {})}`;
+  return new Error(
+    `capture-browser-scenario failed for ${startUrl}: ${detail}`,
     {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 64 * 1_024 * 1_024,
+      cause,
     },
   );
+};
+
+/** Run scenario capture through the public one-shot CLI. */
+export async function runScenarioCli(scenario) {
+  let stdout;
+  try {
+    ({ stdout } = await execute(
+      process.execPath,
+      [
+        "scripts/rea.mjs",
+        "capture-browser-scenario",
+        JSON.stringify(scenario),
+        "--json",
+      ],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        maxBuffer: 64 * 1_024 * 1_024,
+      },
+    ));
+  } catch (cause) {
+    throw scenarioCliFailure(cause, scenario);
+  }
   return JSON.parse(stdout);
 }
 

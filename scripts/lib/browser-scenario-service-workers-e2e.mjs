@@ -144,6 +144,47 @@ export async function verifyScenarioServiceWorkers(endpoint, targetId) {
       await assertRestored();
     };
 
+    // Name what the attached document looked like, so a retried capture keeps
+    // the reason a failing attempt could not report on its own.
+    const cleanPageState = async () => {
+      try {
+        return await page.evaluate(async () => ({
+          state: document.querySelector("#state")?.textContent ?? null,
+          blocked:
+            document.querySelector("#state")?.getAttribute("data-blocked") ??
+            null,
+          registrations: (await navigator.serviceWorker.getRegistrations())
+            .length,
+          policyApplied: String(navigator.serviceWorker.register).includes(
+            "service workers are blocked by scenario policy",
+          ),
+        }));
+      } catch (cause) {
+        return { unavailable: String(cause) };
+      }
+    };
+    // A blocked registration is sticky, so a retry cannot hide a policy that
+    // never applied; it only absorbs a lost transport between the two attached
+    // CDP clients.
+    const captureClean = async (scenario) => {
+      try {
+        return (await runScenarioCli(scenario)).normalized_result;
+      } catch (cause) {
+        const before = await cleanPageState();
+        console.log(
+          `Browser verifier: retrying clean service worker capture (${cause.message}); page=${JSON.stringify(before)}`,
+        );
+        try {
+          return (await runScenarioCli(scenario)).normalized_result;
+        } catch (retried) {
+          throw new AggregateError(
+            [cause, retried],
+            `clean service worker capture failed twice; page=${JSON.stringify(before)}`,
+          );
+        }
+      }
+    };
+
     // A fresh attached origin blocks registration, then restores both the
     // current document and future documents when its transport disconnects.
     const clean = scenarioFor(`${first.origin}/register`, [
@@ -154,7 +195,10 @@ export async function verifyScenarioServiceWorkers(endpoint, targetId) {
         state: "visible",
       },
     ]);
-    const cleanCapture = (await runScenarioCli(clean)).normalized_result;
+    // Start from a document this fixture owns instead of inheriting whatever
+    // the previous sub-scenario left loaded.
+    await page.goto("about:blank");
+    const cleanCapture = await captureClean(clean);
     assert.ok(cleanCapture.steps.every(({ status }) => status === "completed"));
     assert.equal(cleanCapture.browser.cleanup, "disconnected-external");
     await assertRestored();
