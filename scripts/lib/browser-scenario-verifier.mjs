@@ -143,12 +143,14 @@ const scenarioCliFailure = (cause, scenario) => {
     reported === undefined
       ? `exit=${String(cause?.code ?? "unknown")} stderr=${stderr.trim() || "<empty>"}`
       : `code=${String(reported.code)} category=${String(reported.category)} details=${JSON.stringify(reported.details ?? {})}`;
-  return new Error(
+  const failure = new Error(
     `capture-browser-scenario failed for ${startUrl}: ${detail}`,
-    {
-      cause,
-    },
+    { cause },
   );
+  // Callers parse the child's stdio, so the wrapper keeps the original fields.
+  for (const key of ["stdout", "stderr", "code", "killed", "signal", "cmd"])
+    failure[key] = cause?.[key];
+  return failure;
 };
 
 /** Run scenario capture through the public one-shot CLI. */
