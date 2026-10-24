@@ -1,5 +1,14 @@
 # Changelog
 
+## [6.5.0](https://github.com/Mixian07/rea-main/compare/rea-agents-6.4.0...rea-agents-6.5.0) (2026-10-24)
+
+
+### Bug Fixes
+
+* **ci:** attribute browser scenario CLI failures and decouple the service worker capture ([8fc1d1b](https://github.com/Mixian07/rea-main/commit/8fc1d1bbba389098e896f675a480355c7f26f7cb))
+* **ci:** keep child stdio on browser scenario CLI failures ([062aca7](https://github.com/Mixian07/rea-main/commit/062aca7084d24a26e0b2fb30b25577e8c21e53b3))
+* **ci:** restore exec bits and fix firmware/pcap/process/evm diagnostics ([4698729](https://github.com/Mixian07/rea-main/commit/469872976b04b6a664abdc379875796ab6aea005))
+
 ## [6.4.0](https://github.com/morluto/rea/compare/rea-agents-6.3.0...rea-agents-6.4.0) (2026-10-11)
 
 ### Highlights
