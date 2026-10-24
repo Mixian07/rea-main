@@ -106,6 +106,7 @@ const evmCleanupFailure = (
   reason: string,
   output?: AnalysisCapturedOutput,
   cause?: unknown,
+  commandFailure?: OwnedCommandFailure,
 ): ProviderCleanupError => {
   const partialObservation = result.ok
     ? evmExecutionEvidence(input, result.value)
@@ -118,7 +119,16 @@ const evmCleanupFailure = (
     resources,
     {
       reason,
-      previous_error: result.ok ? null : projectAnalysisError(result.error),
+      previous_error: result.ok
+        ? null
+        : commandFailure === undefined
+          ? projectAnalysisError(result.error)
+          : {
+              failure_kind: commandFailure.reason,
+              message: commandFailure.message,
+              exit_code: commandFailure.snapshot?.exitCode ?? null,
+              signal: commandFailure.snapshot?.signal ?? null,
+            },
       ...(capturedOutput === undefined
         ? {}
         : { captured_output: { ...capturedOutput } }),
@@ -188,6 +198,7 @@ export class EvmoleInterfaceProvider implements EvmInterfacePort {
         }
       | undefined;
     let retainedOutput: AnalysisCapturedOutput | undefined;
+    let commandFailure: OwnedCommandFailure | undefined;
     let phase: "configuration" | "artifact-read" | "worker" = "configuration";
     let workerLimits: EvmWorkerLimits | undefined;
     const limiter =
@@ -444,8 +455,12 @@ export class EvmoleInterfaceProvider implements EvmInterfacePort {
         }),
       );
     } catch (cause: unknown) {
-      if (cause instanceof OwnedCommandFailure)
-        processOwner = cause.cleanupOwner;
+      if (cause instanceof OwnedCommandFailure) {
+        commandFailure = cause;
+        // A retained cleanup keeps its supervisor; only a fresh failure
+        // supplies one. Overwriting with undefined would hide the retention.
+        if (cause.cleanupOwner !== undefined) processOwner = cause.cleanupOwner;
+      }
       let fileFailure: EvmFileSizeFailureEvidence | undefined;
       let markerCleanupFailure: ArtifactReaderFailure | undefined;
       if (
@@ -537,6 +552,7 @@ export class EvmoleInterfaceProvider implements EvmInterfacePort {
           processCleanup.reason,
           retainedOutput,
           processOwner,
+          commandFailure,
         ),
       );
     }

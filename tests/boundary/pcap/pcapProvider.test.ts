@@ -90,7 +90,7 @@ if [ "$1" = "--version" ]; then printf 'Capinfos (Wireshark) 4.6.6-stub\\n'; exi
 if [ "${String(options.failCapinfos === true)}" = "true" ]; then
   printf 'capinfos: The file is not a capture file' >&2; exit 1
 fi
-printf '%s\\n' '${CAPINFOS_OUTPUT.replace(/'/gu, "'\\''")}'
+printf '%s' '${CAPINFOS_OUTPUT.replace(/'/gu, "'\\''")}'
 exit 0
 `,
     { mode: 0o755 },

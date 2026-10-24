@@ -8,7 +8,10 @@ import {
 import { projectAnalysisError } from "../../domain/analysisErrorProjection.js";
 import { createEvidence, parseEvidence } from "../../domain/evidence.js";
 import { describeValidationFailure } from "../../domain/evidenceBundle.js";
-import { jsonValueSchema } from "../../domain/jsonValue.js";
+import {
+  jsonValueSchema,
+  jsonValueValidationIssue,
+} from "../../domain/jsonValue.js";
 import {
   analysisInputErrorFromIssues,
   projectInputIssues,
@@ -224,7 +227,18 @@ const readJson = async (
     throw cause;
   });
   if (signal?.aborted) throw new AnalysisCancelledError(operation);
-  if (loaded.ok) return loaded.value;
+  if (loaded.ok) {
+    // Reject over-deep JSON iteratively before schema parsing: recursive
+    // validators exhaust the call stack and report "Maximum call stack size
+    // exceeded" instead of the intended nesting-depth diagnostic.
+    const nestingIssue = jsonValueValidationIssue(loaded.value);
+    if (nestingIssue !== undefined)
+      throw new ProcessCliFailure(
+        "invalid_input",
+        `Capture evidence is malformed (${nestingIssue}). Create new capture evidence, then try again.`,
+      );
+    return loaded.value;
+  }
   if (loaded.error._tag !== "EvidenceFileError") throw loaded.error;
   const detail = describeValidationFailure(loaded.error.cause);
   throw new ProcessCliFailure(
